@@ -1634,3 +1634,19 @@ tbody tr:hover {
     align-items: stretch;
   }
 }
+
+
+/* Persentase sparepart hidup (Data Barang Rusak) */
+.persen-pill {
+  display: inline-block;
+  min-width: 52px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  background: #f1f5f9;
+  color: #475569;
+}
+.persen-pill.tinggi { background: #dcfce7; color: #15803d; }
+.persen-pill.sedang { background: #fef9c3; color: #b45309; }
+.persen-pill.rendah { background: #fee2e2; color: #b91c1c; }

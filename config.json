@@ -4,10 +4,7 @@
   "password": "",
   "port": 3306,
   "databases": {
-    "hardware_hp": "laporan_hardware_hp",
-    "hardware_alat": "laporan_hardware_alat",
-    "hardware_rusak": "laporan_hardware_rusak",
-    "casing_admin": "laporan_casing_admin",
-    "casing_paket": "laporan_casing_paket"
+    "hardware": "laporan_hardware",
+    "casing": "laporan_casing"
   }
 }

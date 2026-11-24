@@ -7,12 +7,9 @@ Panduan ini menjelaskan cara menghosting aplikasi **Laporan Service Multi-Landin
 ## 📋 Ringkasan Kebutuhan Server
 1. **Node.js**: Versi 16 atau lebih baru (v18 / v20 LTS direkomendasikan).
 2. **Database MySQL / MariaDB**:
-   Aplikasi menggunakan 5 database terpisah:
-   - `laporan_hardware_hp` *(Service HP, PC & Tab)*
-   - `laporan_hardware_alat` *(Service Alat Lain)*
-   - `laporan_hardware_rusak` *(Data Barang Rusak)*
-   - `laporan_casing_admin` *(Dari Admin Stock)*
-   - `laporan_casing_paket` *(Dari Paket)*
+   Aplikasi menggunakan **2 database**, dengan tabel terpisah per landing page:
+   - `laporan_hardware` *(Teknisi Hardware)* ➔ tabel `hp_*` (Service HP, PC & Tab), `alat_*` (Service Alat Lain), `rusak_*` (Data Barang Rusak)
+   - `laporan_casing` *(Teknisi Casing)* ➔ tabel `admin_*` (Dari Admin Stock), `paket_*` (Dari Paket)
 3. **Penyimpanan Fallback JSON**: Jika MySQL belum aktif atau koneksi terputus, server otomatis menyimpan ke folder `data/` sebagai file JSON sehingga aplikasi tidak akan pernah error/down.
 
 ---
@@ -21,17 +18,14 @@ Panduan ini menjelaskan cara menghosting aplikasi **Laporan Service Multi-Landin
 
 Jika Anda menyewa shared hosting yang memiliki fitur **"Setup Node.js App"** dan **cPanel**:
 
-### Langkah 1: Buat 5 Database di cPanel
+### Langkah 1: Buat 2 Database di cPanel
 1. Masuk ke **cPanel** akun hosting Anda.
 2. Buka menu **MySQL® Databases**.
 3. Buat database (sesuaikan dengan prefix username cPanel Anda, misalnya `user_`):
-   - `laporan_hardware_hp`
-   - `laporan_hardware_alat`
-   - `laporan_hardware_rusak`
-   - `laporan_casing_admin`
-   - `laporan_casing_paket`
+   - `laporan_hardware`
+   - `laporan_casing`
 4. Buat 1 **MySQL User** baru (misal: `user_teknisi`), buat password yang kuat.
-5. Pada bagian **Add User to Database**, hubungkan user tersebut ke **semua 5 database** di atas dan beri centang **ALL PRIVILEGES**.
+5. Pada bagian **Add User to Database**, hubungkan user tersebut ke **kedua database** di atas dan beri centang **ALL PRIVILEGES**.
 
 ### Langkah 2: Import Tabel Awal (database.sql)
 1. Buka menu **phpMyAdmin** di cPanel.
@@ -54,11 +48,8 @@ Buka file `config.json` di File Manager dan isi sesuai database cPanel Anda:
   "password": "PasswordDatabaseAnda123!",
   "port": 3306,
   "databases": {
-    "hardware_hp": "usernamecpanel_laporan_hardware_hp",
-    "hardware_alat": "usernamecpanel_laporan_hardware_alat",
-    "hardware_rusak": "usernamecpanel_laporan_hardware_rusak",
-    "casing_admin": "usernamecpanel_laporan_casing_admin",
-    "casing_paket": "usernamecpanel_laporan_casing_paket"
+    "hardware": "usernamecpanel_laporan_hardware",
+    "casing": "usernamecpanel_laporan_casing"
   }
 }
 ```
@@ -102,17 +93,11 @@ Jalankan query untuk membuat user dan database:
 ```sql
 CREATE USER 'teknisi'@'localhost' IDENTIFIED BY 'PasswordKuat123!';
 
-CREATE DATABASE IF NOT EXISTS laporan_hardware_hp;
-CREATE DATABASE IF NOT EXISTS laporan_hardware_alat;
-CREATE DATABASE IF NOT EXISTS laporan_hardware_rusak;
-CREATE DATABASE IF NOT EXISTS laporan_casing_admin;
-CREATE DATABASE IF NOT EXISTS laporan_casing_paket;
+CREATE DATABASE IF NOT EXISTS laporan_hardware;
+CREATE DATABASE IF NOT EXISTS laporan_casing;
 
-GRANT ALL PRIVILEGES ON laporan_hardware_hp.* TO 'teknisi'@'localhost';
-GRANT ALL PRIVILEGES ON laporan_hardware_alat.* TO 'teknisi'@'localhost';
-GRANT ALL PRIVILEGES ON laporan_hardware_rusak.* TO 'teknisi'@'localhost';
-GRANT ALL PRIVILEGES ON laporan_casing_admin.* TO 'teknisi'@'localhost';
-GRANT ALL PRIVILEGES ON laporan_casing_paket.* TO 'teknisi'@'localhost';
+GRANT ALL PRIVILEGES ON laporan_hardware.* TO 'teknisi'@'localhost';
+GRANT ALL PRIVILEGES ON laporan_casing.* TO 'teknisi'@'localhost';
 
 FLUSH PRIVILEGES;
 EXIT;
@@ -139,11 +124,8 @@ Isi dengan:
   "password": "PasswordKuat123!",
   "port": 3306,
   "databases": {
-    "hardware_hp": "laporan_hardware_hp",
-    "hardware_alat": "laporan_hardware_alat",
-    "hardware_rusak": "laporan_hardware_rusak",
-    "casing_admin": "laporan_casing_admin",
-    "casing_paket": "laporan_casing_paket"
+    "hardware": "laporan_hardware",
+    "casing": "laporan_casing"
   }
 }
 ```

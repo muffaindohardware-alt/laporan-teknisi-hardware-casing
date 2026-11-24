@@ -128,6 +128,113 @@ const LANDING_CONFIGS = {
   ]
 };
 
+// ==========================================
+// KOLOM HASIL DATA (urutan seragam: tabel web, rekap bulanan & Excel)
+// No, Jenis/Kategori, Jumlah, Lokasi/Sumber, Tgl Masuk, Tgl Keluar,
+// Lama/Baru, Lama Hari, Status, Keterangan/Jenis Perbaikan
+// Landing "Data Barang Rusak": tanpa Tgl Keluar/Lama Hari/Status,
+// diganti Persentase Sparepart Hidup (%)
+// ==========================================
+function isRusakLanding() { return currentDb === 'hardware_rusak'; }
+
+function hasTglKeluarVal(l) { return !!(l && l.tanggalKeluar && String(l.tanggalKeluar).trim()); }
+
+function lamaHariDisplay(l) {
+  return hasTglKeluarVal(l) ? ((l.lamaHari !== undefined && l.lamaHari !== null ? l.lamaHari : 0) + ' hari') : '-';
+}
+
+function getPersenHidup(l) {
+  if (!l || l.persenHidup === undefined || l.persenHidup === null || l.persenHidup === '') return null;
+  const p = parseFloat(l.persenHidup);
+  return isNaN(p) ? null : Math.max(0, Math.min(100, p));
+}
+
+function persenHidupDisplay(l) {
+  const p = getPersenHidup(l);
+  return p === null ? '-' : (Math.round(p * 100) / 100) + '%';
+}
+
+function getLaporanColumnKeys() {
+  if (isRusakLanding()) {
+    return ['no', 'jenis', 'jumlah', 'lokasi', 'tglMasuk', 'kondisi', 'persen', 'keterangan'];
+  }
+  return ['no', 'jenis', 'jumlah', 'lokasi', 'tglMasuk', 'tglKeluar', 'kondisi', 'lamaHari', 'status', 'keterangan'];
+}
+
+function getLaporanColumnLabel(key) {
+  const rusak = isRusakLanding();
+  const cfg = getCurrentLandingConfig();
+  switch (key) {
+    case 'no': return 'No';
+    case 'jenis': return rusak ? cfg.jenisLabel : 'Jenis / Kategori';
+    case 'jumlah': return 'Jumlah';
+    case 'lokasi': return 'Lokasi / Sumber';
+    case 'tglMasuk': return 'Tanggal Masuk';
+    case 'tglKeluar': return 'Tanggal Keluar';
+    case 'kondisi': return rusak ? cfg.kondisiLabel : 'Lama / Baru';
+    case 'lamaHari': return 'Lama Hari';
+    case 'status': return 'Status';
+    case 'persen': return 'Sparepart Hidup (%)';
+    case 'keterangan': return rusak ? cfg.keteranganLabel : 'Keterangan / Jenis Perbaikan';
+  }
+  return key;
+}
+
+// variant: 'main' | 'pill' (dashboard & rekap bulanan)
+function getLaporanCellHtml(key, l, variant) {
+  const selesai = hasTglKeluarVal(l);
+  switch (key) {
+    case 'no': return `<td><strong>${escapeHtml(l.no || '-')}</strong></td>`;
+    case 'jenis': return `<td>${escapeHtml(l.jenisAlatNama || '-')}</td>`;
+    case 'jumlah': return `<td>${l.jumlahAlat || 1}</td>`;
+    case 'lokasi': return `<td>${escapeHtml(l.lokasiDari || '-')}</td>`;
+    case 'tglMasuk': return `<td>${escapeHtml(l.tanggalMasuk || '-')}</td>`;
+    case 'tglKeluar': return `<td>${escapeHtml(l.tanggalKeluar || '-')}</td>`;
+    case 'kondisi': return `<td>${escapeHtml(l.kondisi || 'Lama')}</td>`;
+    case 'lamaHari': return `<td>${lamaHariDisplay(l)}</td>`;
+    case 'status':
+      if (variant === 'pill') {
+        return `<td><span class="badge-status-pill ${selesai ? 'selesai' : 'belum'}">${selesai ? '✓ Selesai' : '⏳ Belum Selesai'}</span></td>`;
+      }
+      return `<td><span class="badge-status ${selesai ? 'status-selesai' : 'status-proses'}">${selesai ? '✓ Selesai' : '⏳ Belum Selesai'}</span></td>`;
+    case 'persen': {
+      const p = getPersenHidup(l);
+      const cls = p === null ? '' : (p >= 70 ? 'tinggi' : (p >= 30 ? 'sedang' : 'rendah'));
+      return `<td><span class="persen-pill ${cls}">${persenHidupDisplay(l)}</span></td>`;
+    }
+    case 'keterangan': return `<td style="text-align:left;">${escapeHtml(l.keteranganPerbaikan || '-')}</td>`;
+  }
+  return '<td></td>';
+}
+
+function renderLaporanHead(rowId, withAksi) {
+  const tr = document.getElementById(rowId);
+  if (!tr) return;
+  let html = getLaporanColumnKeys().map(k => {
+    const style = k === 'no' ? ' style="width: 65px;"' : '';
+    return `<th${style}>${escapeHtml(getLaporanColumnLabel(k))}</th>`;
+  }).join('');
+  if (withAksi) html += '<th style="text-align: center; width: 120px;">Aksi</th>';
+  tr.innerHTML = html;
+}
+
+function sortLaporanByNo(list) {
+  const getNum = (no) => parseInt(String(no || '').replace(/[^0-9]/g, ''), 10) || 0;
+  return list.slice().sort((a, b) => {
+    const na = getNum(a.no), nb = getNum(b.no);
+    if (na !== nb) return na - nb;
+    const da = a.tanggalMasuk || '', db = b.tanggalMasuk || '';
+    if (da !== db) return da.localeCompare(db);
+    return (a.id || 0) - (b.id || 0);
+  });
+}
+
+function getAvgPersenHidup(list) {
+  const vals = list.map(getPersenHidup).filter(v => v !== null);
+  if (vals.length === 0) return 0;
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
 function getCurrentUserRole() {
   if (currentUser && currentUser.username) {
     return currentUser.username.toLowerCase() === 'casing' ? 'casing' : 'hardware';
@@ -229,9 +336,9 @@ function applyLandingPageContext(cfg) {
   const stat2 = document.getElementById('statCard2Label');
   if (stat2) stat2.textContent = isRusak ? 'TOTAL UNIT RUSAK' : 'TOTAL UNIT ALAT';
   const stat3 = document.getElementById('statCard3Label');
-  if (stat3) stat3.textContent = isRusak ? 'SELESAI / DIPROSES' : 'SELESAI';
+  if (stat3) stat3.textContent = isRusak ? 'RATA-RATA SPAREPART HIDUP' : 'SELESAI';
   const stat4 = document.getElementById('statCard4Label');
-  if (stat4) stat4.textContent = isRusak ? 'BELUM DIPROSES' : 'BELUM SELESAI';
+  if (stat4) stat4.textContent = isRusak ? 'SPAREPART HIDUP 0%' : 'BELUM SELESAI';
 
   // 3. Navigation Text in Sidebar
   const navLap = document.getElementById('navLaporanText');
@@ -297,6 +404,20 @@ function applyLandingPageContext(cfg) {
   if (mobTitle) mobTitle.textContent = cfg.shortTitle;
   const sBadge = document.getElementById('sidebarRoleBadge');
   if (sBadge) sBadge.textContent = role === 'casing' ? 'CASING' : 'HARDWARE';
+
+  // 10. Kolom tabel & field khusus Data Barang Rusak
+  renderLaporanHead('recentTableHead', false);
+  renderLaporanHead('laporanTableHead', true);
+  const setShow = (id, show) => { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; };
+  setShow('grpTglKeluar', !isRusak);
+  setShow('grpLamaHari', !isRusak);
+  setShow('grpPersenHidup', isRusak);
+  setShow('filterGroupStatus', !isRusak);
+  if (isRusak && filterStatus !== 'semua') {
+    filterStatus = 'semua';
+    const fs = document.getElementById('filterStatus');
+    if (fs) fs.value = 'semua';
+  }
 }
 
 function updateDatabaseBadgeUI() {
@@ -802,23 +923,36 @@ function renderDashboard() {
   const list = Array.isArray(data.laporan) ? data.laporan : [];
   const totalLaporan = list.length;
   const totalAlat = list.reduce((sum, l) => sum + (parseInt(l.jumlahAlat, 10) || 1), 0);
-  const selesai = list.filter(l => !!(l.tanggalKeluar && String(l.tanggalKeluar).trim())).length;
-  const belum = totalLaporan - selesai;
-  const pctSelesai = totalLaporan > 0 ? Math.round((selesai / totalLaporan) * 100) : 0;
-  const pctBelum = totalLaporan > 0 ? Math.round((belum / totalLaporan) * 100) : 0;
+  const rusakMode = isRusakLanding();
+  const cols = getLaporanColumnKeys();
 
   if (totalLaporanEl) totalLaporanEl.textContent = totalLaporan;
   if (totalAlatEl) totalAlatEl.textContent = totalAlat;
-  if (totalSelesaiEl) totalSelesaiEl.textContent = selesai;
-  if (totalBelumEl) totalBelumEl.textContent = belum;
-  if (persenSelesaiEl) persenSelesaiEl.textContent = `${pctSelesai}% dari total laporan`;
-  if (persenBelumEl) persenBelumEl.textContent = `${pctBelum}% dari total laporan`;
+
+  if (rusakMode) {
+    const avg = getAvgPersenHidup(list);
+    const nol = list.filter(l => getPersenHidup(l) === 0).length;
+    const pctNol = totalLaporan > 0 ? Math.round((nol / totalLaporan) * 100) : 0;
+    if (totalSelesaiEl) totalSelesaiEl.textContent = `${avg}%`;
+    if (totalBelumEl) totalBelumEl.textContent = nol;
+    if (persenSelesaiEl) persenSelesaiEl.textContent = 'rata-rata dari seluruh barang rusak';
+    if (persenBelumEl) persenBelumEl.textContent = `${pctNol}% dari total barang rusak`;
+  } else {
+    const selesai = list.filter(hasTglKeluarVal).length;
+    const belum = totalLaporan - selesai;
+    const pctSelesai = totalLaporan > 0 ? Math.round((selesai / totalLaporan) * 100) : 0;
+    const pctBelum = totalLaporan > 0 ? Math.round((belum / totalLaporan) * 100) : 0;
+    if (totalSelesaiEl) totalSelesaiEl.textContent = selesai;
+    if (totalBelumEl) totalBelumEl.textContent = belum;
+    if (persenSelesaiEl) persenSelesaiEl.textContent = `${pctSelesai}% dari total laporan`;
+    if (persenBelumEl) persenBelumEl.textContent = `${pctBelum}% dari total laporan`;
+  }
 
   if (!recentTbody) return;
   recentTbody.innerHTML = '';
 
   if (list.length === 0) {
-    recentTbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 24px; color: #888;">Belum ada data laporan. Klik tombol <b>"+"</b> di sidebar untuk menambah.</td></tr>`;
+    recentTbody.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center; padding: 24px; color: #888;">Belum ada data laporan. Klik tombol <b>"+"</b> di sidebar untuk menambah.</td></tr>`;
     return;
   }
 
@@ -836,25 +970,8 @@ function renderDashboard() {
   }).slice(0, 5);
 
   recentItems.forEach(l => {
-    const hasTglKeluar = !!(l.tanggalKeluar && String(l.tanggalKeluar).trim());
-    const lamaHariText = hasTglKeluar
-      ? ((l.lamaHari !== undefined && l.lamaHari !== null ? l.lamaHari : 0) + ' hari')
-      : '-';
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${escapeHtml(l.no || '-')}</strong></td>
-      <td>${escapeHtml(l.tanggalMasuk || '-')}</td>
-      <td>${l.jumlahAlat || 1}</td>
-      <td style="text-align:left;">${escapeHtml(l.keteranganPerbaikan || '-')}</td>
-      <td>${escapeHtml(l.jenisAlatNama || '-')}</td>
-      <td>${escapeHtml(l.lokasiDari || '-')}</td>
-      <td>${lamaHariText}</td>
-      <td>
-        <span class="badge-status-pill ${hasTglKeluar ? 'selesai' : 'belum'}">
-          ${hasTglKeluar ? '✓ Selesai' : '⏳ Belum Selesai'}
-        </span>
-      </td>
-    `;
+    tr.innerHTML = cols.map(k => getLaporanCellHtml(k, l, 'pill')).join('');
     recentTbody.appendChild(tr);
   });
 }
@@ -941,8 +1058,8 @@ function renderLaporan() {
   // Filter: Pencarian teks
   if (search) {
     list = list.filter(l => {
-      const hasTgl = !!(l.tanggalKeluar && String(l.tanggalKeluar).trim());
-      const statusText = hasTgl ? 'selesai' : 'belum selesai';
+      const hasTgl = hasTglKeluarVal(l);
+      const statusText = isRusakLanding() ? '' : (hasTgl ? 'selesai' : 'belum selesai');
       return (
         (l.no && String(l.no).toLowerCase().includes(search)) ||
         (l.jenisAlatNama && l.jenisAlatNama.toLowerCase().includes(search)) ||
@@ -954,7 +1071,7 @@ function renderLaporan() {
   }
 
   // Filter: Status
-  if (filterStatus && filterStatus !== 'semua') {
+  if (filterStatus && filterStatus !== 'semua' && !isRusakLanding()) {
     list = list.filter(l => {
       const selesai = !!(l.tanggalKeluar && String(l.tanggalKeluar).trim());
       return filterStatus === 'selesai' ? selesai : !selesai;
@@ -984,7 +1101,7 @@ function renderLaporan() {
 
   if (list.length === 0) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="11" style="text-align:center; padding: 25px; color: #888;">
+    tr.innerHTML = `<td colspan="${getLaporanColumnKeys().length + 1}" style="text-align:center; padding: 25px; color: #888;">
       ${search || filterStatus !== 'semua' || filterJenisAlat || filterBulan || filterTahun
         ? 'Tidak ada data laporan yang sesuai filter/pencarian.'
         : 'Belum ada data laporan. Klik tombol <b>"+ Tambah Laporan"</b> untuk menambah.'}
@@ -994,37 +1111,10 @@ function renderLaporan() {
   }
   
   // Urutkan ascending berdasarkan nomor laporan
-  list.slice().sort((a, b) => {
-    const getNum = (no) => {
-      if (!no) return 0;
-      const match = String(no).replace(/[^0-9]/g, '');
-      return parseInt(match, 10) || 0;
-    };
-    const numA = getNum(a.no);
-    const numB = getNum(b.no);
-    if (numA !== numB) return numA - numB;
-    const dateA = a.tanggalMasuk || '';
-    const dateB = b.tanggalMasuk || '';
-    if (dateA !== dateB) return dateA.localeCompare(dateB);
-    return (a.id || 0) - (b.id || 0);
-  }).forEach(l => {
-    const hasTglKeluar = !!(l.tanggalKeluar && String(l.tanggalKeluar).trim());
+  const colKeys = getLaporanColumnKeys();
+  sortLaporanByNo(list).forEach(l => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${escapeHtml(l.no || '-')}</strong></td>
-      <td>${escapeHtml(l.tanggalMasuk || '-')}</td>
-      <td>${escapeHtml(l.tanggalKeluar || '-')}</td>
-      <td>${l.jumlahAlat || 1}</td>
-      <td style="text-align:left;">${escapeHtml(l.keteranganPerbaikan || '-')}</td>
-      <td>${escapeHtml(l.jenisAlatNama || '-')}</td>
-      <td>${escapeHtml(l.lokasiDari || '-')}</td>
-      <td>${escapeHtml(l.kondisi || 'Lama')}</td>
-      <td>${hasTglKeluar ? ((l.lamaHari !== undefined && l.lamaHari !== null ? l.lamaHari : 0) + ' hari') : '-'}</td>
-      <td>
-        <span class="badge-status ${hasTglKeluar ? 'status-selesai' : 'status-proses'}">
-          ${hasTglKeluar ? '✓ Selesai' : '⏳ Belum Selesai'}
-        </span>
-      </td>
+    tr.innerHTML = colKeys.map(k => getLaporanCellHtml(k, l, 'main')).join('') + `
       <td class="actions" style="text-align: center;">
         <button class="edit" onclick="editLaporan(${l.id})">Edit</button>
         <button class="delete" onclick="deleteLaporan(${l.id})">Hapus</button>
@@ -1071,6 +1161,8 @@ function openLaporanModal() {
   document.getElementById('laporanKeterangan').value = '';
   document.getElementById('laporanKondisi').value = 'Lama';
   document.getElementById('laporanLamaHari').value = 0;
+  const persenInput = document.getElementById('laporanPersenHidup');
+  if (persenInput) persenInput.value = '';
 
   renderJenisAlatSelect();
   renderLokasiDatalist();
@@ -1112,7 +1204,20 @@ function saveLaporan() {
   const jenisAlatId = parseInt(document.getElementById('laporanJenisAlat').value);
   const lokasi = document.getElementById('laporanLokasi').value.trim();
   const kondisi = document.getElementById('laporanKondisi').value;
-  const lamaHari = parseInt(document.getElementById('laporanLamaHari').value) || 0;
+  const rusak = isRusakLanding();
+  const lamaHari = rusak ? 0 : (parseInt(document.getElementById('laporanLamaHari').value) || 0);
+  const tglKeluarFinal = rusak ? '' : tglKeluar;
+  let persenHidup;
+  if (rusak) {
+    const rawPersen = String(document.getElementById('laporanPersenHidup').value).trim().replace(',', '.');
+    const p = parseFloat(rawPersen);
+    if (rawPersen === '' || isNaN(p) || p < 0 || p > 100) {
+      alert('Persentase Sparepart Hidup wajib diisi dengan angka 0 - 100.');
+      document.getElementById('laporanPersenHidup').focus();
+      return;
+    }
+    persenHidup = Math.round(p * 100) / 100;
+  }
 
   if (!tglMasuk) { alert('Tanggal Masuk wajib diisi!'); document.getElementById('laporanTglMasuk').focus(); return; }
   if (!keterangan) { alert('Keterangan / Jenis Perbaikan wajib diisi!'); document.getElementById('laporanKeterangan').focus(); return; }
@@ -1131,10 +1236,13 @@ function saveLaporan() {
   if (editingLaporanId) {
     const idx = data.laporan.findIndex(l => l.id === editingLaporanId);
     if (idx !== -1) {
-      data.laporan[idx] = { ...data.laporan[idx], no, tanggalMasuk: tglMasuk, tanggalKeluar: tglKeluar, jumlahAlat, keteranganPerbaikan: keterangan, jenisAlatId, jenisAlatNama, lokasiDari: lokasi, kondisi, lamaHari };
+      data.laporan[idx] = { ...data.laporan[idx], no, tanggalMasuk: tglMasuk, tanggalKeluar: tglKeluarFinal, jumlahAlat, keteranganPerbaikan: keterangan, jenisAlatId, jenisAlatNama, lokasiDari: lokasi, kondisi, lamaHari };
+      if (rusak) data.laporan[idx].persenHidup = persenHidup;
     }
   } else {
-    data.laporan.push({ id: Date.now(), no, tanggalMasuk: tglMasuk, tanggalKeluar: tglKeluar, jumlahAlat, keteranganPerbaikan: keterangan, jenisAlatId, jenisAlatNama, lokasiDari: lokasi, kondisi, lamaHari });
+    const baru = { id: Date.now(), no, tanggalMasuk: tglMasuk, tanggalKeluar: tglKeluarFinal, jumlahAlat, keteranganPerbaikan: keterangan, jenisAlatId, jenisAlatNama, lokasiDari: lokasi, kondisi, lamaHari };
+    if (rusak) baru.persenHidup = persenHidup;
+    data.laporan.push(baru);
   }
 
   saveData();
@@ -1162,6 +1270,8 @@ function editLaporan(id) {
   document.getElementById('laporanKeterangan').value = l.keteranganPerbaikan || '';
   document.getElementById('laporanKondisi').value = l.kondisi || 'Lama';
   document.getElementById('laporanLamaHari').value = l.lamaHari !== undefined ? l.lamaHari : 0;
+  const persenEdit = document.getElementById('laporanPersenHidup');
+  if (persenEdit) persenEdit.value = getPersenHidup(l) === null ? '' : getPersenHidup(l);
   document.getElementById('laporanJenisAlat').value = l.jenisAlatId || '';
 
   document.getElementById('modalLaporan').classList.add('active');
@@ -1245,6 +1355,7 @@ async function importLaporanExcelFromInput(event) {
           t.text.includes('keterangan') || 
           t.text.includes('perbaikan') || 
           t.text.includes('jenis alat') || 
+          t.text.includes('jenis / kategori') || 
           t.text.includes('tanggal masuk')
         );
 
@@ -1258,9 +1369,10 @@ async function importLaporanExcelFromInput(event) {
             else if (txt === 'lama') colMap.qtyLama = t.col;
             else if (txt === 'baru') colMap.qtyBaru = t.col;
             else if (txt.includes('jumlah') || txt.includes('qty')) colMap.jumlah = t.col;
+            else if (txt.includes('sparepart hidup') || txt.includes('persen')) colMap.persen = t.col;
             else if (txt.includes('keterangan') || txt.includes('perbaikan') || txt.includes('keluhan')) colMap.keterangan = t.col;
-            else if (txt.includes('jenis alat') || txt.includes('kategori alat') || txt === 'alat') colMap.jenisAlat = t.col;
-            else if (txt.includes('lokasi') || txt.includes('dari')) colMap.lokasi = t.col;
+            else if (txt.includes('jenis alat') || txt.includes('jenis / kategori') || txt.includes('kategori alat') || txt.includes('nama / jenis') || txt === 'alat') colMap.jenisAlat = t.col;
+            else if (txt.includes('lokasi') || txt.includes('sumber') || txt.includes('dari')) colMap.lokasi = t.col;
             else if (txt.includes('lama / baru') || txt.includes('kondisi')) colMap.kondisi = t.col;
             else if (txt.includes('lama hari')) colMap.lamaHari = t.col;
             else if (txt === 'status') colMap.status = t.col;
@@ -1270,7 +1382,7 @@ async function importLaporanExcelFromInput(event) {
 
       if (headerRowIndex === -1) {
         headerRowIndex = 1;
-        colMap = { no: 1, tglMasuk: 2, tglKeluar: 3, qtyLama: 4, qtyBaru: 5, keterangan: 6, jenisAlat: 7, lokasi: 8, lamaHari: 9, status: 10 };
+        colMap = { no: 1, jenisAlat: 2, jumlah: 3, lokasi: 4, tglMasuk: 5, tglKeluar: 6, kondisi: 7, lamaHari: 8, status: 9, keterangan: 10 };
       }
 
       ws.eachRow((row, rowNumber) => {
@@ -1337,6 +1449,12 @@ async function importLaporanExcelFromInput(event) {
           if (!isNaN(rawH)) lamaHariVal = rawH;
         }
 
+        let persenVal = null;
+        if (colMap.persen) {
+          const pRaw = parseFloat(String(row.getCell(colMap.persen).text || '').replace('%', '').replace(',', '.'));
+          if (!isNaN(pRaw)) persenVal = Math.max(0, Math.min(100, pRaw));
+        }
+
         importedLaporan.push({
           no: noVal,
           tanggalMasuk: tglMasukVal,
@@ -1346,7 +1464,8 @@ async function importLaporanExcelFromInput(event) {
           jenisAlatNama: jenisAlatVal,
           lokasiDari: lokasiVal,
           kondisi: kondisi,
-          lamaHari: lamaHariVal
+          lamaHari: lamaHariVal,
+          ...(persenVal !== null ? { persenHidup: persenVal } : {})
         });
       });
     });
@@ -1407,7 +1526,8 @@ async function importLaporanExcelFromInput(event) {
           jenisAlatNama: item.jenisAlatNama,
           lokasiDari: item.lokasiDari,
           kondisi: item.kondisi,
-          lamaHari: item.lamaHari
+          lamaHari: item.lamaHari,
+          ...(item.persenHidup !== undefined ? { persenHidup: item.persenHidup } : {})
         });
         addedCount++;
       }
@@ -1852,8 +1972,11 @@ function renderCekBulananTab() {
   });
 
   const totalAlat = sorted.reduce((sum, l) => sum + (parseInt(l.jumlahAlat) || 1), 0);
-  const selesai = sorted.filter(l => !!(l.tanggalKeluar && String(l.tanggalKeluar).trim())).length;
+  const selesai = sorted.filter(hasTglKeluarVal).length;
   const belumSelesai = sorted.length - selesai;
+  const rusakBln = isRusakLanding();
+  const avgPersenBln = getAvgPersenHidup(sorted);
+  const nolBln = sorted.filter(l => getPersenHidup(l) === 0).length;
   const namabulan = monthsIndo[parseInt(bulan) - 1];
 
   const judulEl = document.getElementById('tabBulananJudul');
@@ -1879,49 +2002,23 @@ function renderCekBulananTab() {
         <div class="cek-stat-label">Total Alat</div>
       </div>
       <div class="cek-stat cek-stat-green">
-        <div class="cek-stat-num">${selesai}</div>
-        <div class="cek-stat-label">Selesai</div>
+        <div class="cek-stat-num">${rusakBln ? avgPersenBln + '%' : selesai}</div>
+        <div class="cek-stat-label">${rusakBln ? 'Rata-rata Sparepart Hidup' : 'Selesai'}</div>
       </div>
       <div class="cek-stat cek-stat-amber">
-        <div class="cek-stat-num">${belumSelesai}</div>
-        <div class="cek-stat-label">Belum Selesai</div>
+        <div class="cek-stat-num">${rusakBln ? nolBln : belumSelesai}</div>
+        <div class="cek-stat-label">${rusakBln ? 'Sparepart Hidup 0%' : 'Belum Selesai'}</div>
       </div>
     </div>
     <div class="table-container">
     <table>
       <thead>
-        <tr>
-          <th>No</th>
-          <th>Tgl Masuk</th>
-          <th>Tgl Keluar</th>
-          <th>Jumlah</th>
-          <th>Keterangan / Jenis Perbaikan</th>
-          <th>Jenis Alat</th>
-          <th>Lokasi / Dari</th>
-          <th>Lama Hari</th>
-          <th>Status</th>
-        </tr>
+        <tr>${getLaporanColumnKeys().map(k => `<th>${escapeHtml(getLaporanColumnLabel(k))}</th>`).join('')}</tr>
       </thead>
       <tbody>`;
 
   sorted.forEach(l => {
-    const hasTglKeluar = !!(l.tanggalKeluar && String(l.tanggalKeluar).trim());
-    const lamaHariText = hasTglKeluar
-      ? ((l.lamaHari !== undefined && l.lamaHari !== null ? l.lamaHari : 0) + ' hari')
-      : '-';
-    html += `
-      <tr>
-        <td><strong>${escapeHtml(l.no || '-')}</strong></td>
-        <td>${escapeHtml(l.tanggalMasuk || '-')}</td>
-        <td>${escapeHtml(l.tanggalKeluar || '-')}</td>
-        <td>${l.jumlahAlat || 1}</td>
-        <td style="text-align:left;">${escapeHtml(l.keteranganPerbaikan || '-')}</td>
-        <td>${escapeHtml(l.jenisAlatNama || '-')}</td>
-        <td>${escapeHtml(l.lokasiDari || '-')}</td>
-        <td>${lamaHariText}</td>
-        <td><span class="badge-status-pill ${hasTglKeluar ? 'selesai' : 'belum'}">
-          ${hasTglKeluar ? '✓ Selesai' : '⏳ Belum'}</span></td>
-      </tr>`;
+    html += `<tr>${getLaporanColumnKeys().map(k => getLaporanCellHtml(k, l, 'pill')).join('')}</tr>`;
   });
 
   html += `</tbody></table></div>`;
@@ -2060,13 +2157,20 @@ function createLaporanSheet(wb, sheetName, items, exportData, monthLabel) {
     views: [{ showGridLines: true }]
   });
 
+  const rusak = isRusakLanding();
+  const colKeys = getLaporanColumnKeys();
+  const colLetter = (i) => String.fromCharCode(65 + i); // A, B, C ...
+  const lastL = colLetter(colKeys.length - 1);
+  const prevL = colLetter(colKeys.length - 2);
+  const idxOf = (k) => colKeys.indexOf(k);
+
   let titleText = exportData.title || 'Laporan Service Bulanan Sistem Android';
   if (monthLabel && !titleText.toLowerCase().includes(monthLabel.toLowerCase())) {
     titleText = `${titleText} - ${monthLabel}`;
   }
 
   // 1. Judul Laporan (Baris 1)
-  ws.mergeCells('A1:J1');
+  ws.mergeCells(`A1:${lastL}1`);
   const titleCell = ws.getCell('A1');
   titleCell.value = titleText;
   titleCell.font = { name: 'Times New Roman', size: 14, bold: true };
@@ -2083,46 +2187,18 @@ function createLaporanSheet(wb, sheetName, items, exportData, monthLabel) {
     right: { style: 'thin', color: { argb: 'FF000000' } }
   };
 
-  // 2. Header Tabel (Baris 3 dan 4)
-  ws.mergeCells('A3:A4');
-  ws.getCell('A3').value = 'No';
-
-  ws.mergeCells('B3:B4');
-  ws.getCell('B3').value = 'Tanggal Masuk';
-
-  ws.mergeCells('C3:C4');
-  ws.getCell('C3').value = 'Tanggal Keluar';
-
-  ws.mergeCells('D3:E3');
-  ws.getCell('D3').value = 'Jumlah Alat';
-
-  ws.getCell('D4').value = 'Lama';
-  ws.getCell('E4').value = 'Baru';
-
-  ws.mergeCells('F3:F4');
-  ws.getCell('F3').value = 'Keterangan/Jenis Perbaikan';
-
-  ws.mergeCells('G3:G4');
-  ws.getCell('G3').value = 'Jenis Alat';
-
-  ws.mergeCells('H3:H4');
-  ws.getCell('H3').value = 'Lokasi/Dari';
-
-  ws.mergeCells('I3:I4');
-  ws.getCell('I3').value = 'Lama Hari';
-
-  ws.mergeCells('J3:J4');
-  ws.getCell('J3').value = 'Status';
+  // 2. Header Tabel (Baris 3 dan 4, tiap kolom digabung vertikal)
+  colKeys.forEach((k, i) => {
+    const L = colLetter(i);
+    ws.mergeCells(`${L}3:${L}4`);
+    ws.getCell(`${L}3`).value = getLaporanColumnLabel(k);
+  });
 
   for (let r = 3; r <= 4; r++) {
     ws.getRow(r).height = 26;
-    for (let c = 1; c <= 10; c++) {
+    for (let c = 1; c <= colKeys.length; c++) {
       const cell = ws.getRow(r).getCell(c);
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: headerBgColor }
-      };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerBgColor } };
       cell.font = headerFont;
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = thinBorder;
@@ -2131,80 +2207,58 @@ function createLaporanSheet(wb, sheetName, items, exportData, monthLabel) {
 
   // 3. Baris Data Laporan
   let currentRow = 5;
-  const sortedItems = items.slice().sort((a, b) => {
-    const getNum = (no) => {
-      if (!no) return 0;
-      const match = String(no).replace(/[^0-9]/g, '');
-      return parseInt(match, 10) || 0;
-    };
-    const numA = getNum(a.no);
-    const numB = getNum(b.no);
-    if (numA !== numB) return numA - numB;
-    const dateA = a.tanggalMasuk || '';
-    const dateB = b.tanggalMasuk || '';
-    if (dateA !== dateB) return dateA.localeCompare(dateB);
-    return (a.id || 0) - (b.id || 0);
-  });
+  const sortedItems = sortLaporanByNo(items);
 
   let totalAlatLama = 0;
   let totalAlatBaru = 0;
   let totalSelesai = 0;
   let totalBelumSelesai = 0;
+  const kolKet = idxOf('keterangan');
 
   sortedItems.forEach((l, index) => {
     const r = ws.getRow(currentRow);
-    const noVal = l.no || (index + 1);
-    const tglMasukVal = l.tanggalMasuk || '-';
-    const tglKeluarVal = l.tanggalKeluar || '-';
-
     const isBaru = (l.kondisi || '').toLowerCase() === 'baru';
     const qty = parseInt(l.jumlahAlat, 10) || 1;
-    const lamaVal = isBaru ? '' : qty;
-    const baruVal = isBaru ? qty : '';
+    if (isBaru) totalAlatBaru += qty; else totalAlatLama += qty;
 
-    if (isBaru) totalAlatBaru += qty;
-    else totalAlatLama += qty;
+    const hasTglKeluar = hasTglKeluarVal(l);
+    if (hasTglKeluar) totalSelesai++; else totalBelumSelesai++;
 
-    const hasTglKeluar = !!(l.tanggalKeluar && String(l.tanggalKeluar).trim());
-    if (hasTglKeluar) totalSelesai++;
-    else totalBelumSelesai++;
-
-    const lamaHariVal = hasTglKeluar 
-      ? ((l.lamaHari !== undefined && l.lamaHari !== null ? l.lamaHari : 0) + ' hari')
-      : '-';
-    const statusVal = hasTglKeluar ? 'Selesai' : 'Belum Selesai';
     const ketText = l.keteranganPerbaikan || '-';
-
     const lines = String(ketText).split('\n').reduce((acc, line) => {
-      return acc + Math.max(1, Math.ceil((line.length || 1) / 44));
+      return acc + Math.max(1, Math.ceil((line.length || 1) / 50));
     }, 0);
     r.height = Math.max(26, lines * 22);
 
-    const rowValues = [
-      noVal,
-      tglMasukVal,
-      tglKeluarVal,
-      lamaVal,
-      baruVal,
-      ketText,
-      l.jenisAlatNama || '-',
-      l.lokasiDari || '-',
-      lamaHariVal,
-      statusVal
-    ];
-
-    rowValues.forEach((val, colIdx) => {
+    colKeys.forEach((k, colIdx) => {
       const cell = r.getCell(colIdx + 1);
+      let val;
+      switch (k) {
+        case 'no': val = l.no || (index + 1); break;
+        case 'jenis': val = l.jenisAlatNama || '-'; break;
+        case 'jumlah': val = qty; break;
+        case 'lokasi': val = l.lokasiDari || '-'; break;
+        case 'tglMasuk': val = l.tanggalMasuk || '-'; break;
+        case 'tglKeluar': val = l.tanggalKeluar || '-'; break;
+        case 'kondisi': val = l.kondisi || 'Lama'; break;
+        case 'lamaHari': val = lamaHariDisplay(l); break;
+        case 'status': val = hasTglKeluar ? 'Selesai' : 'Belum Selesai'; break;
+        case 'persen': {
+          const p = getPersenHidup(l);
+          val = p === null ? '-' : p / 100;
+          if (p !== null) cell.numFmt = '0.##%';
+          break;
+        }
+        case 'keterangan': val = ketText; break;
+        default: val = '';
+      }
       cell.value = val;
       cell.border = thinBorder;
+      cell.alignment = (k === 'keterangan')
+        ? { horizontal: 'left', vertical: 'middle', wrapText: true }
+        : { horizontal: 'center', vertical: 'middle', wrapText: true };
 
-      if (colIdx === 5) {
-        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-      } else {
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      }
-
-      if (colIdx === 9) {
+      if (k === 'status') {
         if (hasTglKeluar) {
           cell.font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF15803D' } };
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
@@ -2221,33 +2275,31 @@ function createLaporanSheet(wb, sheetName, items, exportData, monthLabel) {
   });
 
   const totalKeseluruhanAlat = totalAlatLama + totalAlatBaru;
+  const avgPersen = getAvgPersenHidup(sortedItems);
 
-  // Baris Total Tabel
+  // Baris Total Tabel: "JUMLAH" (No + Jenis) | total unit (Jumlah) | ringkasan
   const rowTotal = ws.getRow(currentRow);
   rowTotal.height = 26;
-  ws.mergeCells(`A${currentRow}:C${currentRow}`);
+  ws.mergeCells(`A${currentRow}:B${currentRow}`);
   const cellTotalLabel = ws.getCell(`A${currentRow}`);
   cellTotalLabel.value = 'JUMLAH';
   cellTotalLabel.font = { name: 'Times New Roman', size: 12, bold: true };
   cellTotalLabel.alignment = { horizontal: 'center', vertical: 'middle' };
 
-  const cellTotalLama = ws.getCell(`D${currentRow}`);
-  cellTotalLama.value = totalAlatLama;
-  cellTotalLama.font = { name: 'Times New Roman', size: 12, bold: true };
-  cellTotalLama.alignment = { horizontal: 'center', vertical: 'middle' };
+  const cellTotalQty = ws.getCell(`C${currentRow}`);
+  cellTotalQty.value = totalKeseluruhanAlat;
+  cellTotalQty.font = { name: 'Times New Roman', size: 12, bold: true };
+  cellTotalQty.alignment = { horizontal: 'center', vertical: 'middle' };
 
-  const cellTotalBaru = ws.getCell(`E${currentRow}`);
-  cellTotalBaru.value = totalAlatBaru;
-  cellTotalBaru.font = { name: 'Times New Roman', size: 12, bold: true };
-  cellTotalBaru.alignment = { horizontal: 'center', vertical: 'middle' };
-
-  ws.mergeCells(`F${currentRow}:J${currentRow}`);
-  const cellSummaryInline = ws.getCell(`F${currentRow}`);
-  cellSummaryInline.value = `Total Alat: ${totalKeseluruhanAlat} unit | Selesai: ${totalSelesai} | Belum Selesai: ${totalBelumSelesai}`;
+  ws.mergeCells(`D${currentRow}:${lastL}${currentRow}`);
+  const cellSummaryInline = ws.getCell(`D${currentRow}`);
+  cellSummaryInline.value = rusak
+    ? `Total Barang Rusak: ${totalKeseluruhanAlat} unit | Lama: ${totalAlatLama} | Baru: ${totalAlatBaru} | Rata-rata Sparepart Hidup: ${avgPersen}%`
+    : `Total Alat: ${totalKeseluruhanAlat} unit | Lama: ${totalAlatLama} | Baru: ${totalAlatBaru} | Selesai: ${totalSelesai} | Belum Selesai: ${totalBelumSelesai}`;
   cellSummaryInline.font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF004080' } };
   cellSummaryInline.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
 
-  for (let c = 1; c <= 10; c++) {
+  for (let c = 1; c <= colKeys.length; c++) {
     const cell = rowTotal.getCell(c);
     cell.border = thinBorder;
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
@@ -2266,10 +2318,14 @@ function createLaporanSheet(wb, sheetName, items, exportData, monthLabel) {
   const summaryItems = [
     { label: '• Jumlah Alat Lama', val: `${totalAlatLama} unit`, color: null },
     { label: '• Jumlah Alat Baru', val: `${totalAlatBaru} unit`, color: null },
-    { label: '• Total Keseluruhan Alat', val: `${totalKeseluruhanAlat} unit`, color: 'FF004080', bold: true },
-    { label: '• Status Selesai', val: `${totalSelesai} laporan`, color: 'FF15803D', bold: true },
-    { label: '• Status Belum Selesai', val: `${totalBelumSelesai} laporan`, color: 'FFB45309', bold: true }
+    { label: '• Total Keseluruhan Alat', val: `${totalKeseluruhanAlat} unit`, color: 'FF004080', bold: true }
   ];
+  if (rusak) {
+    summaryItems.push({ label: '• Rata-rata Sparepart Hidup', val: `${avgPersen}%`, color: 'FF15803D', bold: true });
+  } else {
+    summaryItems.push({ label: '• Status Selesai', val: `${totalSelesai} laporan`, color: 'FF15803D', bold: true });
+    summaryItems.push({ label: '• Status Belum Selesai', val: `${totalBelumSelesai} laporan`, color: 'FFB45309', bold: true });
+  }
 
   summaryItems.forEach(item => {
     ws.mergeCells(`B${currentRow}:C${currentRow}`);
@@ -2288,71 +2344,41 @@ function createLaporanSheet(wb, sheetName, items, exportData, monthLabel) {
     currentRow++;
   });
 
-  // 5. Kolom Tanda Tangan
+  // 5. Kolom Tanda Tangan (kanan = 2 kolom terakhir, kiri = B:C)
   const sig = exportData.signature;
   if (sig && sig.enabled !== false) {
+    const R = `${prevL}`;  // kolom awal blok kanan
+    const place = (range, value, bold) => {
+      ws.mergeCells(range);
+      const cell = ws.getCell(range.split(':')[0]);
+      cell.value = value;
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.font = { name: 'Times New Roman', size: 12, bold: !!bold };
+    };
+
     currentRow++;
-
-    ws.mergeCells(`I${currentRow}:J${currentRow}`);
-    const cellDate = ws.getCell(`I${currentRow}`);
-    cellDate.value = sig.kotaTanggal || 'Magelang, 31 Oktober 2026';
-    cellDate.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellDate.font = { name: 'Times New Roman', size: 12 };
+    place(`${R}${currentRow}:${lastL}${currentRow}`, sig.kotaTanggal || 'Magelang, 31 Oktober 2026');
 
     currentRow++;
-    ws.mergeCells(`B${currentRow}:C${currentRow}`);
-    const cellMengetahui = ws.getCell(`B${currentRow}`);
-    cellMengetahui.value = sig.mengetahuiTitle || 'Mengetahui,';
-    cellMengetahui.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellMengetahui.font = { name: 'Times New Roman', size: 12 };
-
-    ws.mergeCells(`I${currentRow}:J${currentRow}`);
-    const cellPembuat = ws.getCell(`I${currentRow}`);
-    cellPembuat.value = sig.pembuatTitle || 'Dibuat Oleh,';
-    cellPembuat.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellPembuat.font = { name: 'Times New Roman', size: 12 };
+    place(`B${currentRow}:C${currentRow}`, sig.mengetahuiTitle || 'Mengetahui,');
+    place(`${R}${currentRow}:${lastL}${currentRow}`, sig.pembuatTitle || 'Dibuat Oleh,');
 
     currentRow += 5; // Spasi tanda tangan fisik
 
-    ws.mergeCells(`B${currentRow}:C${currentRow}`);
-    const cellNameLeft = ws.getCell(`B${currentRow}`);
-    cellNameLeft.value = sig.mengetahuiNama || 'Wiyatmo Diarto, SE';
-    cellNameLeft.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellNameLeft.font = { name: 'Times New Roman', size: 12, bold: true };
-
-    ws.mergeCells(`I${currentRow}:J${currentRow}`);
-    const cellNameRight = ws.getCell(`I${currentRow}`);
-    cellNameRight.value = sig.pembuatNama || (currentUser && currentUser.nama) || 'Teknisi Service';
-    cellNameRight.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellNameRight.font = { name: 'Times New Roman', size: 12, bold: true };
+    place(`B${currentRow}:C${currentRow}`, sig.mengetahuiNama || 'Wiyatmo Diarto, SE', true);
+    place(`${R}${currentRow}:${lastL}${currentRow}`, sig.pembuatNama || (currentUser && currentUser.nama) || 'Teknisi Service', true);
 
     currentRow++;
-    ws.mergeCells(`B${currentRow}:C${currentRow}`);
-    const cellJabatanLeft = ws.getCell(`B${currentRow}`);
-    cellJabatanLeft.value = sig.mengetahuiJabatan || 'Manager Muffaindo';
-    cellJabatanLeft.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellJabatanLeft.font = { name: 'Times New Roman', size: 12 };
-
-    ws.mergeCells(`I${currentRow}:J${currentRow}`);
-    const cellJabatanRight = ws.getCell(`I${currentRow}`);
-    cellJabatanRight.value = sig.pembuatJabatan || (currentUser && currentUser.role) || 'Teknisi Service';
-    cellJabatanRight.alignment = { horizontal: 'center', vertical: 'middle' };
-    cellJabatanRight.font = { name: 'Times New Roman', size: 12 };
+    place(`B${currentRow}:C${currentRow}`, sig.mengetahuiJabatan || 'Manager Muffaindo');
+    place(`${R}${currentRow}:${lastL}${currentRow}`, sig.pembuatJabatan || (currentUser && currentUser.role) || 'Teknisi Service');
   }
 
-  // 6. Lebar Kolom
-  ws.columns = [
-    { width: 7 },   // No (A)
-    { width: 17 },  // Tanggal Masuk (B)
-    { width: 17 },  // Tanggal Keluar (C)
-    { width: 9 },   // Lama (D)
-    { width: 9 },   // Baru (E)
-    { width: 54 },  // Keterangan (F)
-    { width: 26 },  // Jenis Alat (G)
-    { width: 26 },  // Lokasi/Dari (H)
-    { width: 15 },  // Lama Hari (I)
-    { width: 18 }   // Status (J)
-  ];
+  // 6. Lebar Kolom (mengikuti urutan kolom)
+  const widthMap = {
+    no: 7, jenis: 28, jumlah: 10, lokasi: 28, tglMasuk: 17, tglKeluar: 17,
+    kondisi: 13, lamaHari: 13, status: 18, persen: 20, keterangan: 54
+  };
+  ws.columns = colKeys.map(k => ({ width: widthMap[k] || 15 }));
 }
 
 async function confirmExportToExcel() {

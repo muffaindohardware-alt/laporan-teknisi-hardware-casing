@@ -20,7 +20,7 @@ function getWebDir() {
 
 const WEB_DIR = getWebDir();
 
-// Daftar 5 database yang didukung
+// 5 landing page (data terpisah per tabel), disimpan di 2 database MySQL: hardware & casing
 const DB_KEYS = db.DB_KEYS || ['hardware_hp', 'hardware_alat', 'hardware_rusak', 'casing_admin', 'casing_paket'];
 
 // Normalisasi target database key
@@ -412,7 +412,7 @@ process.on('uncaughtException', (err) => {
 });
 
 async function startServer() {
-  // Inisialisasi data map untuk seluruh 5 database
+  // Inisialisasi data map untuk seluruh 5 landing page
   const initialMap = {};
   DB_KEYS.forEach(k => {
     initialMap[k] = readJsonData(k);
@@ -431,10 +431,10 @@ async function startServer() {
       console.log(`  ▶ Akses LAN (${item.name}): http://${item.ip}:${DEFAULT_PORT}`);
     });
     console.log('-------------------------------------------------------------');
-    console.log('  🗄️ Multi-Database Terpisah:');
+    console.log('  🗄️ 2 Database MySQL, tabel terpisah per landing page:');
     DB_KEYS.forEach(k => {
       const st = db.getDatabaseStatus(k);
-      console.log(`   • [${k}] : ${st.connected ? `MySQL [${st.database}]` : 'File JSON (' + path.basename(getDataFilePath(k)) + ')'}`);
+      console.log(`   • [${k}] : ${st.connected ? `MySQL [${st.database}].${st.tablePrefix}*` : 'File JSON (' + path.basename(getDataFilePath(k)) + ')'}`);
     });
     console.log('=============================================================\n');
   });

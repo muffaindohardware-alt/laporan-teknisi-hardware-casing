@@ -288,16 +288,7 @@
             <div class="recent-table-wrap">
               <table>
                 <thead>
-                  <tr>
-                    <th>NO</th>
-                    <th>TGL MASUK</th>
-                    <th>JUMLAH</th>
-                    <th id="thRecentKeterangan">KETERANGAN / PERBAIKAN</th>
-                    <th id="thRecentJenis">JENIS ALAT</th>
-                    <th>LOKASI / DARI</th>
-                    <th>LAMA HARI</th>
-                    <th>STATUS</th>
-                  </tr>
+                  <tr id="recentTableHead"></tr>
                 </thead>
                 <tbody id="recentLaporanTable"></tbody>
               </table>
@@ -335,7 +326,7 @@
 
             <!-- Filter Bar -->
             <div class="filter-bar">
-              <div class="filter-group">
+              <div class="filter-group" id="filterGroupStatus">
                 <label>Status:</label>
                 <select id="filterStatus" onchange="applyFilter()" title="Filter berdasarkan status">
                   <option value="semua">Semua Status</option>
@@ -386,19 +377,7 @@
           <div class="table-container">
             <table>
               <thead>
-                <tr>
-                  <th style="width: 65px;">No</th>
-                  <th>Tanggal Masuk</th>
-                  <th>Tanggal Keluar</th>
-                  <th>Jumlah</th>
-                  <th id="thTableKeterangan">Keterangan / Jenis Perbaikan</th>
-                  <th id="thTableJenis">Jenis / Kategori</th>
-                  <th>Lokasi / Sumber</th>
-                  <th id="thTableKondisi">Lama / Baru</th>
-                  <th>Lama Hari</th>
-                  <th>Status</th>
-                  <th style="text-align: center; width: 120px;">Aksi</th>
-                </tr>
+                <tr id="laporanTableHead"></tr>
               </thead>
               <tbody id="laporanTable"></tbody>
             </table>
@@ -544,7 +523,7 @@
           <label id="lblModalTglMasuk">Tanggal Masuk *</label>
           <input type="date" id="laporanTglMasuk" onchange="hitungLamaHari()" required>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="grpTglKeluar">
           <label id="lblModalTglKeluar">Tanggal Keluar / Selesai</label>
           <input type="date" id="laporanTglKeluar" onchange="hitungLamaHari()">
           <div id="statusPreview" style="margin-top: 6px;"></div>
@@ -565,11 +544,16 @@
           <input type="text" id="laporanLokasi" list="lokasiDatalist" placeholder="Pilih atau ketik Lokasi / Sumber..." autocomplete="off" required>
           <datalist id="lokasiDatalist"></datalist>
         </div>
+        <div class="form-group" id="grpPersenHidup" style="display: none;">
+          <label>Persentase Sparepart Hidup (%) *</label>
+          <input type="number" id="laporanPersenHidup" min="0" max="100" step="1" placeholder="Contoh: 60">
+          <div class="label-hint" style="margin-top: 4px;">0% = semua sparepart mati, 100% = semua masih hidup</div>
+        </div>
         <div class="form-group full">
           <label id="lblModalKeterangan">Keterangan / Jenis Perbaikan *</label>
           <textarea id="laporanKeterangan" rows="3" placeholder="Deskripsi keluhan, jenis perbaikan, atau kerusakan..." required></textarea>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="grpLamaHari">
           <label>Lama Hari Pengerjaan</label>
           <input type="number" id="laporanLamaHari" readonly value="0" class="input-readonly">
         </div>
